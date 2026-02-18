@@ -7,11 +7,12 @@
   justify-content: center;
   padding: 1.5rem;
   font-weight: normal;
+  background: linear-gradient(135deg, #e5ecff, #f7f9ff);
 }
 
 a {
   text-decoration: none;
-  color: hsla(160, 100%, 37%, 1);
+  color: var(--vt-c-indigo);
   transition: 0.3s;
 }
 

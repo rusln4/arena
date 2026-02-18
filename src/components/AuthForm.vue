@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import arenaLogo from './icons/281_arena.jpg'
 
 const mode = ref('login')
 
@@ -123,10 +124,24 @@ const onRegister = async () => {
     error.value = 'Ошибка соединения с сервером'
   }
 }
+
+const onGuestLogin = () => {
+  const user = {
+    id: 'guest',
+    name: 'Гость',
+    role: 'гость',
+  }
+
+  setCurrentUser(user)
+  emits('login', user)
+}
 </script>
 
 <template>
   <div class="auth">
+    <div class="auth__logo">
+      <img :src="arenaLogo" alt="Логотип Arena" />
+    </div>
     <h1 class="auth__title">Магазин плавательных товаров</h1>
 
     <div class="auth__tabs">
@@ -191,6 +206,10 @@ const onRegister = async () => {
       <button class="auth__submit" type="submit" :disabled="!isRegisterValid">Зарегистрироваться</button>
     </form>
 
+    <button type="button" class="auth__guest" @click="onGuestLogin">
+      Войти как гость
+    </button>
+
     <p v-if="error" class="auth__message auth__message--error">
       {{ error }}
     </p>
@@ -207,8 +226,19 @@ const onRegister = async () => {
   margin: 0 auto;
   padding: 1.75rem 1.5rem 1.5rem;
   border-radius: 12px;
-  background-color: var(--color-background-soft);
+  background-color: #ffffff;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+.auth__logo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.auth__logo img {
+  max-width: 140px;
+  height: auto;
 }
 
 .auth__title {
@@ -235,8 +265,8 @@ const onRegister = async () => {
 }
 
 .auth__tab--active {
-  background-color: hsla(160, 100%, 37%, 0.12);
-  color: hsla(160, 100%, 37%, 1);
+  background-color: rgba(31, 42, 168, 0.1);
+  color: var(--vt-c-indigo);
 }
 
 .auth__form {
@@ -260,7 +290,7 @@ const onRegister = async () => {
 }
 
 .auth__field input:focus {
-  border-color: hsla(160, 100%, 37%, 1);
+  border-color: var(--vt-c-indigo);
 }
 
 .auth__submit {
@@ -269,7 +299,7 @@ const onRegister = async () => {
   border-radius: 999px;
   border: none;
   cursor: pointer;
-  background-color: hsla(160, 100%, 37%, 1);
+  background-color: var(--vt-c-indigo);
   color: white;
   font-weight: 500;
 }
@@ -277,6 +307,18 @@ const onRegister = async () => {
 .auth__submit:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.auth__guest {
+  margin-top: 0.75rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--vt-c-indigo);
+  background-color: transparent;
+  color: var(--vt-c-indigo);
+  cursor: pointer;
+  font-weight: 500;
 }
 
 .auth__message {
