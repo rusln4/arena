@@ -1,0 +1,108 @@
+Мне нужно реализовать проект "Магазин плавательных товаров" 
+Вот структура бд котрую я разработал:
+
+CREATE TABLE `categories` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(45) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+CREATE TABLE `images` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `image` varchar(255) DEFAULT NULL,
+  `product_id` int NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_images_product_idx` (`product_id`),
+  CONSTRAINT `fk_images_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+CREATE TABLE `manufacturers` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+CREATE TABLE `order_details` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `order_id` int NOT NULL,
+  `product_id` int NOT NULL,
+  `count` int NOT NULL,
+  `price` double NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_order_details_product_idx` (`product_id`),
+  KEY `fk_order_details_order_idx` (`order_id`),
+  CONSTRAINT `fk_order_details_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`),
+  CONSTRAINT `fk_order_details_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+CREATE TABLE `orders` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `date_order` date NOT NULL,
+  `date_delivery` date NOT NULL,
+  `pickup_point_id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `code` int NOT NULL,
+  `status_order` varchar(45) NOT NULL DEFAULT 'Оформлен',
+  PRIMARY KEY (`id`),
+  KEY `fk_orders_user_idx` (`user_id`),
+  KEY `fk_orders_pickup_point_idx` (`pickup_point_id`),
+  CONSTRAINT `fk_orders_pickup_point` FOREIGN KEY (`pickup_point_id`) REFERENCES `pickup_points` (`id`),
+  CONSTRAINT `fk_orders_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+CREATE TABLE `pickup_points` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `address_index` varchar(45) NOT NULL,
+  `address_city` varchar(100) NOT NULL,
+  `address_street` varchar(100) NOT NULL,
+  `address_number_house` varchar(45) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+CREATE TABLE `products` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `price` double NOT NULL,
+  `supplier_id` int NOT NULL,
+  `manufacture_id` int NOT NULL,
+  `category_id` int NOT NULL,
+  `discount` int NOT NULL DEFAULT '0',
+  `description` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_products_category_idx` (`category_id`),
+  KEY `fk_products_supplier_idx` (`supplier_id`),
+  KEY `fk_products_manufacturers_idx` (`manufacture_id`),
+  CONSTRAINT `fk_products_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`),
+  CONSTRAINT `fk_products_manufacturer` FOREIGN KEY (`manufacture_id`) REFERENCES `manufacturers` (`id`),
+  CONSTRAINT `fk_products_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+CREATE TABLE `storages` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `product_id` int NOT NULL,
+  `count` int NOT NULL,
+  `unit` enum('шт.') NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_storages_product_idx` (`product_id`),
+  CONSTRAINT `fk_storages_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+CREATE TABLE `suppliers` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+CREATE TABLE `users` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `lastname` varchar(100) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `midname` varchar(100) DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `password` varchar(255) DEFAULT NULL,
+  `role` enum('администратр','менеджер','клиент') NOT NULL DEFAULT 'клиент',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+
+Задание: Для начала реализуем авторризацию/регистрацию
