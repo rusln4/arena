@@ -9,7 +9,7 @@ const props = defineProps({
   },
 })
 
-const emits = defineEmits(['logout'])
+const emits = defineEmits(['logout', 'open-profile'])
 
 const products = ref([])
 const categories = ref([])
@@ -168,7 +168,9 @@ onMounted(() => {
       </div>
 
       <div class="catalog__user">
-        <span class="catalog__user-name">{{ props.user.name }}</span>
+        <button type="button" class="catalog__user-name" @click="emits('open-profile')">
+          {{ props.user.name }}
+        </button>
         <button type="button" class="catalog__logout" @click="emits('logout')">Выйти</button>
       </div>
     </header>

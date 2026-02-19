@@ -88,6 +88,68 @@ app.post('/api/register', async (req, res) => {
   }
 })
 
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: 'Некорректный идентификатор пользователя' })
+    }
+
+    const [rows] = await pool.execute(
+      'SELECT id, lastname, name, midname, email, role FROM users WHERE id = ? LIMIT 1',
+      [id]
+    )
+
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Пользователь не найден' })
+    }
+
+    const user = rows[0]
+    return res.json({ user })
+  } catch (error) {
+    console.error('Get user error', error)
+    return res.status(500).json({ message: 'Ошибка получения данных пользователя' })
+  }
+})
+
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const { lastname, name, midname, email } = req.body || {}
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: 'Некорректный идентификатор пользователя' })
+    }
+
+    if (!lastname || !name || !email) {
+      return res.status(400).json({ message: 'Заполните фамилию, имя и email' })
+    }
+
+    const [exists] = await pool.execute('SELECT id FROM users WHERE id = ? LIMIT 1', [id])
+
+    if (!exists.length) {
+      return res.status(404).json({ message: 'Пользователь не найден' })
+    }
+
+    await pool.execute(
+      'UPDATE users SET lastname = ?, name = ?, midname = ?, email = ? WHERE id = ?',
+      [lastname, name, midname || null, email, id]
+    )
+
+    const [rows] = await pool.execute(
+      'SELECT id, lastname, name, midname, email, role FROM users WHERE id = ? LIMIT 1',
+      [id]
+    )
+
+    const user = rows[0]
+    return res.json({ user })
+  } catch (error) {
+    console.error('Update user error', error)
+    return res.status(500).json({ message: 'Ошибка обновления профиля пользователя' })
+  }
+})
+
 app.get('/api/categories', async (_req, res) => {
   try {
     const [rows] = await pool.execute('SELECT id, name FROM categories ORDER BY name')

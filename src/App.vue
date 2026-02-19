@@ -2,8 +2,10 @@
 import { ref, onMounted } from 'vue'
 import AuthForm from './components/AuthForm.vue'
 import Catalog from './components/Catalog.vue'
+import Profile from './components/Profile.vue'
 
 const currentUser = ref(null)
+const currentView = ref('catalog')
 
 const loadCurrentUser = () => {
   try {
@@ -20,11 +22,26 @@ const loadCurrentUser = () => {
 
 const handleLogin = (user) => {
   currentUser.value = user
+  currentView.value = 'catalog'
 }
 
 const logout = () => {
   localStorage.removeItem('currentUser')
   currentUser.value = null
+  currentView.value = 'catalog'
+}
+
+const openProfile = () => {
+  currentView.value = 'profile'
+}
+
+const openCatalog = () => {
+  currentView.value = 'catalog'
+}
+
+const handleUserUpdated = (user) => {
+  currentUser.value = user
+  localStorage.setItem('currentUser', JSON.stringify(user))
 }
 
 onMounted(() => {
@@ -39,7 +56,19 @@ onMounted(() => {
     </section>
 
     <section v-else class="layout__center layout__center--catalog">
-      <Catalog :user="currentUser" @logout="logout" />
+      <Catalog
+        v-if="currentView === 'catalog'"
+        :user="currentUser"
+        @logout="logout"
+        @open-profile="openProfile"
+      />
+      <Profile
+        v-else-if="currentView === 'profile'"
+        :user="currentUser"
+        @back="openCatalog"
+        @logout="logout"
+        @user-updated="handleUserUpdated"
+      />
     </section>
   </main>
 </template>
