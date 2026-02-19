@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import AuthForm from './components/AuthForm.vue'
+import Catalog from './components/Catalog.vue'
 
 const currentUser = ref(null)
 
@@ -38,15 +39,7 @@ onMounted(() => {
     </section>
 
     <section v-else class="layout__center">
-      <div class="account">
-        <h1 class="account__title">Добро пожаловать, {{ currentUser.name }}!</h1>
-        <p class="account__text">
-          Вы успешно авторизованы как
-          <strong>{{ currentUser.role }}</strong
-          >.
-        </p>
-        <button type="button" class="account__logout" @click="logout">Выйти</button>
-      </div>
+      <Catalog :user="currentUser" @logout="logout" />
     </section>
   </main>
 </template>
@@ -55,7 +48,6 @@ onMounted(() => {
 .layout {
   min-height: 100vh;
   display: flex;
-  align-items: center;
   justify-content: center;
   padding: 1.5rem;
 }
@@ -64,31 +56,9 @@ onMounted(() => {
   width: 100%;
 }
 
-.account {
-  max-width: 420px;
-  margin: 0 auto;
-  padding: 2rem;
-  border-radius: 12px;
-  background-color: var(--color-background-soft);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-  text-align: center;
-}
-
-.account__title {
-  margin-bottom: 0.75rem;
-}
-
-.account__text {
-  margin-bottom: 1.5rem;
-}
-
-.account__logout {
-  padding: 0.6rem 1.2rem;
-  border-radius: 999px;
-  border: none;
-  cursor: pointer;
-  background-color: hsla(160, 100%, 37%, 1);
-  color: white;
-  font-weight: 500;
+@media (max-width: 480px) {
+  .layout {
+    padding: 1rem;
+  }
 }
 </style>

@@ -111,7 +111,7 @@ app.get('/api/products', async (_req, res) => {
         c.name AS category,
         m.name AS manufacturer,
         COALESCE(SUM(s.quantity), 0) AS stock,
-        MIN(i.image) AS image
+        MIN(i.image) AS imagePath
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN manufacturers m ON p.manufacturer_id = m.id
@@ -133,6 +133,37 @@ app.get('/api/products', async (_req, res) => {
   } catch (error) {
     console.error('Products error', error)
     return res.status(500).json({ message: 'Ошибка получения каталога товаров' })
+  }
+})
+
+app.get('/api/product-image/:productId', async (req, res) => {
+  try {
+    const productId = Number(req.params.productId)
+    if (!Number.isInteger(productId) || productId <= 0) {
+      return res.status(400).json({ message: 'Некорректный идентификатор товара' })
+    }
+
+    const [rows] = await pool.execute(
+      'SELECT image FROM images WHERE product_id = ? ORDER BY id LIMIT 1',
+      [productId]
+    )
+
+    if (!rows.length || !rows[0].image) {
+      return res.status(404).end()
+    }
+
+    const filePath = rows[0].image
+    return res.sendFile(filePath, (err) => {
+      if (err) {
+        console.error('Image send error', err)
+        if (!res.headersSent) {
+          res.status(404).end()
+        }
+      }
+    })
+  } catch (error) {
+    console.error('Product image error', error)
+    return res.status(500).json({ message: 'Ошибка загрузки изображения товара' })
   }
 })
 
