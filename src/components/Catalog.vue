@@ -156,7 +156,7 @@ onMounted(() => {
 <template>
   <div class="catalog">
     <header class="catalog__header">
-      <div class="catalog__logo">Arena Shop</div>
+      <div class="catalog__logo">Arena</div>
 
       <div class="catalog__search">
         <input
@@ -286,23 +286,26 @@ onMounted(() => {
 <style scoped>
 .catalog {
   width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1.5rem 0;
+  min-height: 100vh;
+  padding: 1.5rem 2.5rem 2rem;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  background: linear-gradient(180deg, #f7f9ff 0%, #ffffff 40%);
 }
 
 .catalog__header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 1.5rem;
 }
 
 .catalog__logo {
-  font-weight: 700;
-  font-size: 1.1rem;
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: 0.03em;
+  color: var(--vt-c-indigo);
 }
 
 .catalog__search {
@@ -315,6 +318,7 @@ onMounted(() => {
   border-radius: 999px;
   border: 1px solid var(--color-border);
   outline: none;
+  background-color: var(--color-background-soft);
 }
 
 .catalog__search-input:focus {
@@ -345,12 +349,14 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 260px 1fr;
   gap: 1.5rem;
+  align-items: flex-start;
 }
 
 .catalog__sidebar {
   padding: 1rem;
   border-radius: 12px;
   background-color: var(--color-background-soft);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
 }
 
 .catalog__block + .catalog__block {
@@ -381,22 +387,24 @@ onMounted(() => {
 
 .catalog__price-row {
   display: flex;
+  flex-direction: column;
   gap: 0.5rem;
 }
 
 .catalog__price-field {
-  flex: 1;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.25rem;
   font-size: 0.85rem;
 }
 
 .catalog__price-field input {
-  flex: 1;
+  width: 100%;
   padding: 0.3rem 0.4rem;
   border-radius: 6px;
   border: 1px solid var(--color-border);
+  background-color: var(--color-background-soft);
 }
 
 .catalog__price-hint {
@@ -431,6 +439,7 @@ onMounted(() => {
 
 .catalog__title {
   font-size: 1.5rem;
+  color: var(--color-heading);
 }
 
 .catalog__count {
@@ -448,6 +457,7 @@ onMounted(() => {
   padding: 0.3rem 0.6rem;
   border-radius: 999px;
   border: 1px solid var(--color-border);
+   background-color: var(--color-background-soft);
 }
 
 .catalog__message {
@@ -473,6 +483,15 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.catalog__card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
 }
 
 .catalog__image-wrapper {

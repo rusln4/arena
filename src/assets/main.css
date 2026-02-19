@@ -2,10 +2,6 @@
 
 #app {
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
   font-weight: normal;
 }
 
@@ -16,7 +12,4 @@ a {
 }
 
 @media (max-width: 480px) {
-  #app {
-    padding: 1rem;
-  }
 }

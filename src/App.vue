@@ -34,11 +34,11 @@ onMounted(() => {
 
 <template>
   <main class="layout">
-    <section v-if="!currentUser" class="layout__center">
+    <section v-if="!currentUser" class="layout__center layout__center--auth">
       <AuthForm @login="handleLogin" />
     </section>
 
-    <section v-else class="layout__center">
+    <section v-else class="layout__center layout__center--catalog">
       <Catalog :user="currentUser" @logout="logout" />
     </section>
   </main>
@@ -47,17 +47,26 @@ onMounted(() => {
 <style scoped>
 .layout {
   min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  padding: 1.5rem;
 }
 
 .layout__center {
   width: 100%;
 }
 
+.layout__center--auth {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.layout__center--catalog {
+  min-height: 100vh;
+}
+
 @media (max-width: 480px) {
-  .layout {
+  .layout__center--auth {
     padding: 1rem;
   }
 }
