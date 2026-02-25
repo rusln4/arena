@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import logoUrl from '@/components/icons/281_arena.jpg'
 
 const mode = ref('login')
 
@@ -127,7 +128,7 @@ const onRegister = async () => {
 
 <template>
   <div class="auth">
-    <h1 class="auth__title">Магазин плавательных товаров</h1>
+    <img class="auth__logo" :src="logoUrl" alt="Логотип" />
 
     <div class="auth__tabs">
       <button
@@ -207,13 +208,23 @@ const onRegister = async () => {
   margin: 0 auto;
   padding: 1.75rem 1.5rem 1.5rem;
   border-radius: 12px;
-  background-color: var(--color-background-soft);
+  background-color: #ffffff;
+  border: 1px solid var(--color-border);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
 }
 
 .auth__title {
   text-align: center;
   margin-bottom: 1.5rem;
+}
+
+.auth__logo {
+  display: block;
+  margin: 0 auto 1.25rem;
+  max-width: 70%;
+  width: 220px;
+  height: auto;
+  border-radius: 8px;
 }
 
 .auth__tabs {
