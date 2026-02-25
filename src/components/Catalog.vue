@@ -9,7 +9,7 @@ const props = defineProps({
   },
 })
 
-const emits = defineEmits(['logout', 'open-profile'])
+const emits = defineEmits(['logout', 'open-profile', 'open-product'])
 
 const products = ref([])
 const categories = ref([])
@@ -151,6 +151,10 @@ const filteredProducts = computed(() => {
 onMounted(() => {
   loadCatalog()
 })
+
+const openProduct = (id) => {
+  emits('open-product', id)
+}
 </script>
 
 <template>
@@ -247,7 +251,12 @@ onMounted(() => {
         </div>
 
         <div v-else class="catalog__grid">
-          <article v-for="product in filteredProducts" :key="product.id" class="catalog__card">
+          <article
+            v-for="product in filteredProducts"
+            :key="product.id"
+            class="catalog__card"
+            @click="openProduct(product.id)"
+          >
             <div class="catalog__image-wrapper">
               <img
                 :src="getImageSrc(product.id)"
@@ -260,7 +269,7 @@ onMounted(() => {
                 type="button"
                 class="catalog__favorite"
                 :class="{ 'catalog__favorite--active': isFavorite(product.id) }"
-                @click="toggleFavorite(product.id)"
+                @click.stop="toggleFavorite(product.id)"
               >
                 ★
               </button>
@@ -489,6 +498,7 @@ onMounted(() => {
   transition:
     transform 0.18s ease,
     box-shadow 0.18s ease;
+  cursor: pointer;
 }
 
 .catalog__card:hover {

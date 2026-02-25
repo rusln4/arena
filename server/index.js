@@ -198,6 +198,55 @@ app.get('/api/products', async (_req, res) => {
   }
 })
 
+app.get('/api/products/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: 'Некорректный идентификатор товара' })
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT
+        p.id,
+        p.name,
+        p.price,
+        p.discount,
+        p.description,
+        p.category_id AS categoryId,
+        c.name AS category,
+        m.name AS manufacturer,
+        COALESCE(SUM(s.quantity), 0) AS stock,
+        MIN(i.image) AS imagePath
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN manufacturers m ON p.manufacturer_id = m.id
+      LEFT JOIN storages s ON s.product_id = p.id
+      LEFT JOIN images i ON i.product_id = p.id
+      WHERE p.id = ?
+      GROUP BY
+        p.id,
+        p.name,
+        p.price,
+        p.discount,
+        p.description,
+        p.category_id,
+        c.name,
+        m.name
+      LIMIT 1`,
+      [id]
+    )
+
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Товар не найден' })
+    }
+
+    return res.json({ product: rows[0] })
+  } catch (error) {
+    console.error('Product by id error', error)
+    return res.status(500).json({ message: 'Ошибка получения данных товара' })
+  }
+})
+
 app.get('/api/product-image/:productId', async (req, res) => {
   try {
     const productId = Number(req.params.productId)

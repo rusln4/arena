@@ -3,9 +3,11 @@ import { ref, onMounted } from 'vue'
 import AuthForm from './components/AuthForm.vue'
 import Catalog from './components/Catalog.vue'
 import Profile from './components/Profile.vue'
+import ProductDetails from './components/ProductDetails.vue'
 
 const currentUser = ref(null)
 const currentView = ref('catalog')
+const selectedProductId = ref(null)
 
 const loadCurrentUser = () => {
   try {
@@ -39,6 +41,11 @@ const openCatalog = () => {
   currentView.value = 'catalog'
 }
 
+const openProduct = (id) => {
+  selectedProductId.value = id
+  currentView.value = 'product'
+}
+
 const handleUserUpdated = (user) => {
   currentUser.value = user
   localStorage.setItem('currentUser', JSON.stringify(user))
@@ -61,6 +68,7 @@ onMounted(() => {
         :user="currentUser"
         @logout="logout"
         @open-profile="openProfile"
+        @open-product="openProduct"
       />
       <Profile
         v-else-if="currentView === 'profile'"
@@ -68,6 +76,11 @@ onMounted(() => {
         @back="openCatalog"
         @logout="logout"
         @user-updated="handleUserUpdated"
+      />
+      <ProductDetails
+        v-else-if="currentView === 'product'"
+        :product-id="selectedProductId"
+        @back="openCatalog"
       />
     </section>
   </main>
