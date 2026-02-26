@@ -59,7 +59,8 @@ const saveProfile = async () => {
       }),
     })
 
-    const data = await response.json()
+    const ct = (response.headers.get('content-type') || '').toLowerCase()
+    const data = ct.includes('application/json') ? await response.json() : { message: await response.text() }
 
     if (!response.ok) {
       error.value = data?.message || 'Не удалось сохранить профиль'
@@ -70,6 +71,7 @@ const saveProfile = async () => {
       success.value = 'Профиль успешно обновлён'
       emits('user-updated', data.user)
     }
+    
   } catch {
     error.value = 'Ошибка соединения с сервером'
   } finally {

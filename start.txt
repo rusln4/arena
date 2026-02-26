@@ -1,0 +1,16 @@
+Шаги и команды
+
+- Перейти в папку проекта
+  
+  - cd ~/Documents/trae_projects/arena_shop
+- Установить зависимости
+  
+  - npm ci
+- Запустить API в отдельном терминале (Терминал №1)
+  
+  - npm run server
+  - Ожидаемый лог: API server listening on http://localhost:3000
+- Запустить фронтенд (Vite) во втором терминале (Терминал №2)
+  
+  - npm run dev
+  - Открыть: http://localhost:5173/

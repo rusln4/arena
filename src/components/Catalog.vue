@@ -7,9 +7,33 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  cartCount: {
+    type: Number,
+    required: false,
+    default: 0,
+  },
+  cartItems: {
+    type: Array,
+    required: false,
+    default: () => [],
+  },
+  canShop: {
+    type: Boolean,
+    required: false,
+    default: true,
+  },
 })
 
-const emits = defineEmits(['logout', 'open-profile', 'open-product'])
+const emits = defineEmits([
+  'logout',
+  'open-profile',
+  'open-admin',
+  'open-product',
+  'open-cart',
+  'add-to-cart',
+  'update-cart-qty',
+  'remove-from-cart',
+])
 
 const products = ref([])
 const categories = ref([])
@@ -21,8 +45,6 @@ const selectedCategoryId = ref(null)
 const priceFrom = ref(null)
 const priceTo = ref(null)
 const sortOption = ref('price_asc')
-
-const favoriteIds = ref([])
 const brokenImageIds = ref([])
 
 const priceFormatter = new Intl.NumberFormat('ru-RU', {
@@ -42,8 +64,19 @@ const loadCatalog = async () => {
       fetch('/api/products'),
     ])
 
-    const categoriesData = await categoriesResponse.json()
-    const productsData = await productsResponse.json()
+    const parseSafe = async (res) => {
+      const ct = (res.headers.get('content-type') || res.headers.get('Content-Type') || '').toLowerCase()
+      if (ct.includes('application/json')) {
+        return await res.json()
+      }
+      const text = await res.text()
+      return { message: text }
+    }
+
+    const [categoriesData, productsData] = await Promise.all([
+      parseSafe(categoriesResponse),
+      parseSafe(productsResponse),
+    ])
 
     if (!categoriesResponse.ok) {
       throw new Error(categoriesData?.message || 'Не удалось получить категории')
@@ -93,16 +126,6 @@ const getImageSrc = (productId) => {
     return placeholderImage
   }
   return `/api/product-image/${productId}`
-}
-
-const isFavorite = (productId) => favoriteIds.value.includes(productId)
-
-const toggleFavorite = (productId) => {
-  if (isFavorite(productId)) {
-    favoriteIds.value = favoriteIds.value.filter((id) => id !== productId)
-  } else {
-    favoriteIds.value = [...favoriteIds.value, productId]
-  }
 }
 
 const clearFilters = () => {
@@ -155,6 +178,39 @@ onMounted(() => {
 const openProduct = (id) => {
   emits('open-product', id)
 }
+
+const addToCart = (product) => {
+  emits('add-to-cart', {
+    id: product.id,
+    name: product.name,
+    price: product.price,
+    discount: product.discount,
+    manufacturer: product.manufacturer,
+    stock: product.stock,
+  }, 1)
+}
+
+const qtyInCart = (id) => {
+  const item = props.cartItems.find((i) => i.id === id)
+  return item ? Number(item.quantity || 0) : 0
+}
+
+const inc = (product) => {
+  const current = qtyInCart(product.id)
+  const max = Number(product.stock) || Infinity
+  const next = Math.min(current + 1, max)
+  emits('update-cart-qty', product.id, next)
+}
+
+const dec = (product) => {
+  const current = qtyInCart(product.id)
+  const next = Math.max(0, current - 1)
+  if (next === 0) {
+    emits('remove-from-cart', product.id)
+  } else {
+    emits('update-cart-qty', product.id, next)
+  }
+}
 </script>
 
 <template>
@@ -172,9 +228,28 @@ const openProduct = (id) => {
       </div>
 
       <div class="catalog__user">
-        <button type="button" class="catalog__user-name" @click="emits('open-profile')">
+        <button type="button" class="catalog__cart" :disabled="!props.canShop" @click="emits('open-cart')">
+          Корзина<span v-if="props.cartCount"> • {{ props.cartCount }}</span>
+        </button>
+        <button
+          v-if="props.user?.role === 'админ' || props.user?.role === 'admin' || props.user?.role === 'администратор'"
+          type="button"
+          class="catalog__admin"
+          @click="emits('open-admin')"
+        >
+          Админ
+        </button>
+        <button
+          v-if="props.user?.role !== 'guest'"
+          type="button"
+          class="catalog__user-name"
+          @click="emits('open-profile')"
+        >
           {{ props.user.name }}
         </button>
+        <span v-else class="catalog__user-name catalog__user-name--disabled">
+          {{ props.user.name }}
+        </span>
         <button type="button" class="catalog__logout" @click="emits('logout')">Выйти</button>
       </div>
     </header>
@@ -265,14 +340,6 @@ const openProduct = (id) => {
                 @error="markImageBroken(product.id)"
               />
               <span v-if="product.stock <= 0" class="catalog__badge">Нет в наличии</span>
-              <button
-                type="button"
-                class="catalog__favorite"
-                :class="{ 'catalog__favorite--active': isFavorite(product.id) }"
-                @click.stop="toggleFavorite(product.id)"
-              >
-                ★
-              </button>
             </div>
             <div class="catalog__info">
               <p class="catalog__category">{{ product.category }}</p>
@@ -286,6 +353,21 @@ const openProduct = (id) => {
                   {{ formatPrice(product.price) }}
                 </span>
               </div>
+              <div v-if="qtyInCart(product.id) > 0" class="catalog__qty" @click.stop>
+                <button type="button" class="catalog__qty-btn" @click="dec(product)">−</button>
+                <span class="catalog__qty-value">{{ qtyInCart(product.id) }}</span>
+                <button type="button" class="catalog__qty-btn" :disabled="qtyInCart(product.id) >= (Number(product.stock) || 9999)" @click="inc(product)">+</button>
+              </div>
+              <button
+                v-else
+                type="button"
+                class="catalog__add"
+                :disabled="product.stock <= 0 || !props.canShop"
+                :title="!props.canShop ? 'Войдите, чтобы добавить в корзину' : ''"
+                @click.stop="addToCart(product)"
+              >
+                В корзину
+              </button>
             </div>
           </article>
         </div>
@@ -342,8 +424,34 @@ const openProduct = (id) => {
   gap: 0.75rem;
 }
 
+.catalog__admin {
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.catalog__cart {
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.catalog__cart:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .catalog__user-name {
   font-size: 0.9rem;
+}
+.catalog__user-name--disabled {
+  opacity: 0.7;
+  cursor: default;
 }
 
 .catalog__logout {
@@ -501,6 +609,54 @@ const openProduct = (id) => {
   cursor: pointer;
 }
 
+.catalog__add {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  background-color: var(--vt-c-indigo);
+  color: white;
+  font-size: 0.85rem;
+}
+
+.catalog__add:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.catalog__qty {
+  margin-top: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--color-background-mute);
+  padding: 0.35rem 0.5rem;
+  border-radius: 999px;
+}
+
+.catalog__qty-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.catalog__qty-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.catalog__qty-value {
+  min-width: 28px;
+  text-align: center;
+  font-weight: 600;
+}
+
 .catalog__card:hover {
   transform: translateY(-2px);
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
@@ -532,23 +688,6 @@ const openProduct = (id) => {
   background-color: rgba(0, 0, 0, 0.6);
   color: white;
   font-size: 0.7rem;
-}
-
-.catalog__favorite {
-  position: absolute;
-  right: 0.75rem;
-  top: 0.75rem;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: none;
-  cursor: pointer;
-  background-color: rgba(255, 255, 255, 0.9);
-  font-size: 1rem;
-}
-
-.catalog__favorite--active {
-  color: #f2994a;
 }
 
 .catalog__info {

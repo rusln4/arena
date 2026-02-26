@@ -18,18 +18,41 @@ const success = ref('')
 
 const emits = defineEmits(['login'])
 
-const isLoginValid = computed(() => loginEmail.value.trim() !== '' && loginPassword.value.trim() !== '')
-
-const isRegisterValid = computed(
-  () =>
-    regLastname.value.trim() !== '' &&
-    regName.value.trim() !== '' &&
-    regEmail.value.trim() !== '' &&
-    regPassword.value.trim() !== ''
+const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const regPasswordRules = (val) => {
+  const v = String(val || '')
+  const len = v.length
+  return { valid: len >= 6 && len <= 64 }
+}
+const isLoginValid = computed(
+  () => emailRe.test(loginEmail.value.trim()) && regPasswordRules(loginPassword.value).valid
 )
+
+const isRegisterValid = computed(() => {
+  const ln = regLastname.value.trim()
+  const nm = regName.value.trim()
+  const em = regEmail.value.trim()
+  const pw = regPassword.value
+  return (
+    ln.length >= 1 &&
+    ln.length <= 100 &&
+    nm.length >= 1 &&
+    nm.length <= 100 &&
+    emailRe.test(em) &&
+    regPasswordRules(pw).valid &&
+    (!regMidname.value || String(regMidname.value).length <= 100)
+  )
+})
 
 const setCurrentUser = (user) => {
   localStorage.setItem('currentUser', JSON.stringify(user))
+}
+
+const onGuest = () => {
+  clearMessages()
+  const user = { id: null, name: 'Гость', role: 'guest' }
+  setCurrentUser(user)
+  emits('login', user)
 }
 
 const clearMessages = () => {
@@ -45,8 +68,12 @@ const switchMode = (nextMode) => {
 
 const onLogin = async () => {
   clearMessages()
-  if (!isLoginValid.value) {
-    error.value = 'Заполните email и пароль'
+  if (!emailRe.test(loginEmail.value.trim())) {
+    error.value = 'Введите корректный email'
+    return
+  }
+  if (!regPasswordRules(loginPassword.value).valid) {
+    error.value = 'Пароль должен быть от 6 до 64 символов'
     return
   }
 
@@ -62,7 +89,8 @@ const onLogin = async () => {
       }),
     })
 
-    const data = await response.json()
+    const ct = (response.headers.get('content-type') || '').toLowerCase()
+    const data = ct.includes('application/json') ? await response.json() : { message: await response.text() }
 
     if (!response.ok) {
       error.value = data?.message || 'Ошибка авторизации'
@@ -84,8 +112,28 @@ const onLogin = async () => {
 
 const onRegister = async () => {
   clearMessages()
-  if (!isRegisterValid.value) {
+  const ln = regLastname.value.trim()
+  const nm = regName.value.trim()
+  const em = regEmail.value.trim()
+  const pw = regPassword.value
+  if (!ln || !nm || !em || !pw) {
     error.value = 'Заполните все обязательные поля'
+    return
+  }
+  if (ln.length < 1 || ln.length > 100) {
+    error.value = 'Фамилия должна быть от 1 до 100 символов'
+    return
+  }
+  if (nm.length < 1 || nm.length > 100) {
+    error.value = 'Имя должно быть от 1 до 100 символов'
+    return
+  }
+  if (!emailRe.test(em)) {
+    error.value = 'Введите корректный email'
+    return
+  }
+  if (!regPasswordRules(pw).valid) {
+    error.value = 'Пароль должен быть от 6 до 64 символов'
     return
   }
 
@@ -104,7 +152,8 @@ const onRegister = async () => {
       }),
     })
 
-    const data = await response.json()
+    const ct = (response.headers.get('content-type') || '').toLowerCase()
+    const data = ct.includes('application/json') ? await response.json() : { message: await response.text() }
 
     if (!response.ok) {
       error.value = data?.message || 'Ошибка регистрации'
@@ -149,47 +198,49 @@ const onRegister = async () => {
       </button>
     </div>
 
-    <form v-if="mode === 'login'" class="auth__form" @submit.prevent="onLogin">
+    <form v-if="mode === 'login'" class="auth__form" @submit.prevent="onLogin" novalidate>
       <label class="auth__field">
         <span>Email</span>
-        <input v-model="loginEmail" type="email" placeholder="example@mail.com" />
+        <input v-model.trim="loginEmail" type="email" placeholder="example@mail.com" required :pattern="emailRe.source" maxlength="254" />
       </label>
 
       <label class="auth__field">
         <span>Пароль</span>
-        <input v-model="loginPassword" type="password" placeholder="Введите пароль" />
+        <input v-model="loginPassword" type="password" placeholder="Минимум 6 символов" minlength="6" maxlength="64" required />
       </label>
 
       <button class="auth__submit" type="submit" :disabled="!isLoginValid">Войти</button>
+      <button class="auth__submit auth__submit--ghost" type="button" @click="onGuest">Войти как гость</button>
     </form>
 
-    <form v-else class="auth__form" @submit.prevent="onRegister">
+    <form v-else class="auth__form" @submit.prevent="onRegister" novalidate>
       <label class="auth__field">
         <span>Фамилия</span>
-        <input v-model="regLastname" type="text" placeholder="Иванов" />
+        <input v-model.trim="regLastname" type="text" placeholder="Иванов" required maxlength="100" />
       </label>
 
       <label class="auth__field">
         <span>Имя</span>
-        <input v-model="regName" type="text" placeholder="Иван" />
+        <input v-model.trim="regName" type="text" placeholder="Иван" required maxlength="100" />
       </label>
 
       <label class="auth__field">
         <span>Отчество</span>
-        <input v-model="regMidname" type="text" placeholder="Иванович" />
+        <input v-model.trim="regMidname" type="text" placeholder="Иванович" maxlength="100" />
       </label>
 
       <label class="auth__field">
         <span>Email</span>
-        <input v-model="regEmail" type="email" placeholder="example@mail.com" />
+        <input v-model.trim="regEmail" type="email" placeholder="example@mail.com" required :pattern="emailRe.source" maxlength="254" />
       </label>
 
       <label class="auth__field">
         <span>Пароль</span>
-        <input v-model="regPassword" type="password" placeholder="Минимум 6 символов" />
+        <input v-model="regPassword" type="password" placeholder="Минимум 6 символов" minlength="6" maxlength="64" required />
       </label>
 
       <button class="auth__submit" type="submit" :disabled="!isRegisterValid">Зарегистрироваться</button>
+      <button class="auth__submit auth__submit--ghost" type="button" @click="onGuest">Войти как гость</button>
     </form>
 
     <p v-if="error" class="auth__message auth__message--error">
@@ -288,6 +339,13 @@ const onRegister = async () => {
 .auth__submit:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.auth__submit--ghost {
+  margin-top: 0.5rem;
+  background: transparent;
+  color: var(--vt-c-indigo);
+  border: 1px solid var(--color-border);
 }
 
 .auth__message {

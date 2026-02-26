@@ -1,11 +1,16 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import placeholderImage from './icons/заглушка.png'
+import placeholderImage from './icons/заглушка.jpg'
 
 const props = defineProps({
   productId: {
     type: Number,
     required: true,
+  },
+  canShop: {
+    type: Boolean,
+    required: false,
+    default: true,
   },
 })
 
@@ -15,6 +20,14 @@ const product = ref(null)
 const loading = ref(false)
 const error = ref('')
 const imageBroken = ref(false)
+const quantity = ref(1)
+const onQtyInput = (e) => {
+  const max = Number(product.value?.stock) || 99
+  const raw = Number(e.target.value)
+  const q = Math.min(Math.max(1, Number.isFinite(raw) ? raw : 1), max)
+  quantity.value = q
+  e.target.value = q
+}
 
 const priceFormatter = new Intl.NumberFormat('ru-RU', {
   style: 'currency',
@@ -102,9 +115,17 @@ onMounted(load)
           {{ product.description }}
         </div>
 
-        <button class="product__buy" :disabled="product.stock <= 0">
-          Добавить в корзину
-        </button>
+        <div class="product__actions">
+          <label class="product__qty">
+            <span>Кол-во</span>
+            <input v-model.number="quantity" type="number" min="1" :max="product.stock || 99" @input="onQtyInput" />
+          </label>
+          <button class="product__buy" :disabled="product.stock <= 0 || !props.canShop" @click="emits('add-to-cart', product, quantity)">
+            Добавить в корзину
+          </button>
+          <button class="product__goto" :disabled="!props.canShop" @click="emits('open-cart')">Открыть корзину</button>
+        </div>
+        <p v-if="!props.canShop" class="product__hint">Войдите, чтобы добавить товар в корзину</p>
       </div>
     </div>
   </div>
@@ -204,6 +225,26 @@ onMounted(load)
   line-height: 1.5;
 }
 
+.product__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.product__qty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.product__qty input {
+  width: 80px;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+}
+
 .product__buy {
   padding: 0.7rem 1rem;
   border-radius: 999px;
@@ -217,6 +258,19 @@ onMounted(load)
 .product__buy:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.product__goto {
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  cursor: pointer;
+}
+.product__hint {
+  margin-top: 0.25rem;
+  color: var(--vt-c-text-light-2);
+  font-size: 0.9rem;
 }
 
 @media (max-width: 900px) {
