@@ -2,6 +2,8 @@ import express from 'express'
 import cors from 'cors'
 import mysql from 'mysql2/promise'
 import dotenv from 'dotenv'
+import path from 'node:path'
+import fs from 'node:fs/promises'
 
 dotenv.config({ path: '.env.local' })
 
@@ -26,7 +28,7 @@ console.log('DB config:', {
 const pool = mysql.createPool(dbConfig)
 
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '15mb' }))
 
 app.post('/api/login', async (req, res) => {
   try {
@@ -195,14 +197,18 @@ app.get('/api/products', async (_req, res) => {
         p.discount,
         p.description,
         p.category_id AS categoryId,
+        p.manufacturer_id AS manufacturerId,
+        p.supplier_id AS supplierId,
         c.name AS category,
         m.name AS manufacturer,
-        COALESCE(SUM(s.quantity), 0) AS stock,
-        MIN(i.image) AS imagePath
+        sup.name AS supplier,
+        COALESCE(SUM(st.quantity), 0) AS stock,
+        MAX(i.id) AS imageId
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN manufacturers m ON p.manufacturer_id = m.id
-      LEFT JOIN storages s ON s.product_id = p.id
+      LEFT JOIN suppliers sup ON p.supplier_id = sup.id
+      LEFT JOIN storages st ON st.product_id = p.id
       LEFT JOIN images i ON i.product_id = p.id
       GROUP BY
         p.id,
@@ -211,8 +217,11 @@ app.get('/api/products', async (_req, res) => {
         p.discount,
         p.description,
         p.category_id,
+        p.manufacturer_id,
+        p.supplier_id,
         c.name,
-        m.name
+        m.name,
+        sup.name
       ORDER BY p.name`
     )
 
@@ -238,14 +247,18 @@ app.get('/api/products/:id', async (req, res) => {
         p.discount,
         p.description,
         p.category_id AS categoryId,
+        p.manufacturer_id AS manufacturerId,
+        p.supplier_id AS supplierId,
         c.name AS category,
         m.name AS manufacturer,
-        COALESCE(SUM(s.quantity), 0) AS stock,
-        MIN(i.image) AS imagePath
+        sup.name AS supplier,
+        COALESCE(SUM(st.quantity), 0) AS stock,
+        MAX(i.id) AS imageId
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN manufacturers m ON p.manufacturer_id = m.id
-      LEFT JOIN storages s ON s.product_id = p.id
+      LEFT JOIN suppliers sup ON p.supplier_id = sup.id
+      LEFT JOIN storages st ON st.product_id = p.id
       LEFT JOIN images i ON i.product_id = p.id
       WHERE p.id = ?
       GROUP BY
@@ -255,8 +268,11 @@ app.get('/api/products/:id', async (req, res) => {
         p.discount,
         p.description,
         p.category_id,
+        p.manufacturer_id,
+        p.supplier_id,
         c.name,
-        m.name
+        m.name,
+        sup.name
       LIMIT 1`,
       [id]
     )
@@ -281,6 +297,24 @@ app.get('/api/manufacturers', async (_req, res) => {
   }
 })
 
+app.get('/api/suppliers', async (_req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT id, name FROM suppliers ORDER BY name')
+    return res.json({ suppliers: rows })
+  } catch (error) {
+    return res.status(500).json({ message: 'Ошибка получения поставщиков' })
+  }
+})
+
+app.get('/api/_debug/products-columns', async (_req, res) => {
+  try {
+    const [cols] = await pool.execute(`SHOW COLUMNS FROM products`)
+    return res.json({ columns: cols })
+  } catch (error) {
+    return res.status(500).json({ message: 'Ошибка получения колонок products', details: error && (error.sqlMessage || error.message) })
+  }
+})
+
 app.get('/api/product-image/:productId', async (req, res) => {
   try {
     const productId = Number(req.params.productId)
@@ -297,7 +331,10 @@ app.get('/api/product-image/:productId', async (req, res) => {
       return res.status(404).end()
     }
 
-    const filePath = rows[0].image
+    let filePath = rows[0].image
+    if (!path.isAbsolute(filePath)) {
+      filePath = path.resolve(process.cwd(), filePath)
+    }
     return res.sendFile(filePath, (err) => {
       if (err) {
         console.error('Image send error', err)
@@ -312,21 +349,82 @@ app.get('/api/product-image/:productId', async (req, res) => {
   }
 })
 
+app.post('/api/products/:id/image', async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const { dataUrl } = req.body || {}
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: 'Некорректный идентификатор товара' })
+    }
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+      return res.status(400).json({ message: 'Ожидается dataUrl изображения' })
+    }
+    const m = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/)
+    if (!m) {
+      return res.status(400).json({ message: 'Некорректный формат dataUrl' })
+    }
+    const mime = m[1].toLowerCase()
+    const base64 = m[2]
+    const ext = mime.includes('jpeg') || mime.includes('jpg') ? 'jpg'
+      : mime.includes('png') ? 'png'
+      : mime.includes('webp') ? 'webp'
+      : 'img'
+    const buf = Buffer.from(base64, 'base64')
+    const uploadsDir = path.resolve(process.cwd(), 'uploads')
+    try { await fs.mkdir(uploadsDir, { recursive: true }) } catch {}
+    const filename = `product_${id}_${Date.now()}.${ext}`
+    const absPath = path.join(uploadsDir, filename)
+    await fs.writeFile(absPath, buf)
+    await pool.execute('DELETE FROM images WHERE product_id = ?', [id])
+    await pool.execute('INSERT INTO images (product_id, image) VALUES (?, ?)', [id, absPath])
+    return res.status(201).json({ ok: true, path: absPath })
+  } catch (error) {
+    console.error('Upload image error', error)
+    return res.status(500).json({ message: 'Ошибка загрузки изображения' })
+  }
+})
+
 app.post('/api/products', async (req, res) => {
   try {
-    const { name, price, discount = 0, description = null, categoryId, manufacturerId = null, stock = null } = req.body || {}
-    if (!name || categoryId == null || price == null) {
-      return res.status(400).json({ message: 'Заполните название, категорию и цену' })
+    const { name, price, discount = 0, description = null, categoryId, manufacturerId = null, supplierId = null, stock = null } = req.body || {}
+    if (!name || categoryId == null || price == null || manufacturerId == null || supplierId == null) {
+      return res.status(400).json({ message: 'Заполните название, категорию, цену, производителя и поставщика' })
+    }
+    if (String(name).trim() === '') {
+      return res.status(400).json({ message: 'Название не может быть пустым' })
+    }
+    if (!Number.isFinite(Number(price)) || Number(price) < 0) {
+      return res.status(400).json({ message: 'Цена должна быть неотрицательным числом' })
+    }
+    const d = Number(discount) || 0
+    if (d < 0 || d > 99) {
+      return res.status(400).json({ message: 'Скидка должна быть от 0 до 99' })
+    }
+    const [ce] = await pool.execute('SELECT id FROM categories WHERE id = ? LIMIT 1', [Number(categoryId)])
+    if (!ce.length) {
+      return res.status(400).json({ message: 'Категория не найдена' })
+    }
+    const [me] = await pool.execute('SELECT id FROM manufacturers WHERE id = ? LIMIT 1', [Number(manufacturerId)])
+    if (!me.length) {
+      return res.status(400).json({ message: 'Производитель не найден' })
+    }
+    const [se] = await pool.execute('SELECT id FROM suppliers WHERE id = ? LIMIT 1', [Number(supplierId)])
+    if (!se.length) {
+      return res.status(400).json({ message: 'Поставщик не найден' })
     }
     const [ins] = await pool.execute(
-      'INSERT INTO products (name, price, discount, description, category_id, manufacturer_id) VALUES (?, ?, ?, ?, ?, ?)',
-      [String(name), Number(price), Number(discount) || 0, description, Number(categoryId), manufacturerId != null ? Number(manufacturerId) : null]
+      'INSERT INTO products (name, price, discount, description, category_id, manufacturer_id, supplier_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [String(name), Number(price), Number(discount) || 0, description ?? '', Number(categoryId), Number(manufacturerId), Number(supplierId)]
     )
     const productId = ins.insertId
     if (stock != null) {
-      const qty = Math.max(0, Number(stock) || 0)
-      if (qty > 0) {
-        await pool.execute('INSERT INTO storages (product_id, quantity) VALUES (?, ?)', [productId, qty])
+      try {
+        const qty = Math.max(0, Number(stock) || 0)
+        if (qty > 0) {
+          await pool.execute('INSERT INTO storages (product_id, quantity) VALUES (?, ?)', [productId, qty])
+        }
+      } catch (e) {
+        console.error('Create product stock insert error', e)
       }
     }
     const [rows] = await pool.execute(
@@ -336,7 +434,9 @@ app.post('/api/products', async (req, res) => {
     )
     return res.status(201).json({ product: rows[0] })
   } catch (error) {
-    return res.status(500).json({ message: 'Ошибка создания товара' })
+    console.error('Create product error', error)
+    const details = error && (error.sqlMessage || error.message)
+    return res.status(500).json({ message: 'Ошибка создания товара', details })
   }
 })
 
@@ -346,7 +446,7 @@ app.put('/api/products/:id', async (req, res) => {
     if (!Number.isInteger(id) || id <= 0) {
       return res.status(400).json({ message: 'Некорректный идентификатор товара' })
     }
-    const { name, price, discount, description, categoryId, manufacturerId, stock } = req.body || {}
+    const { name, price, discount, description, categoryId, manufacturerId, supplierId, stock } = req.body || {}
     if (name != null && String(name).trim() === '') {
       return res.status(400).json({ message: 'Название не может быть пустым' })
     }
@@ -369,6 +469,10 @@ app.put('/api/products/:id', async (req, res) => {
         if (!me.length) return res.status(400).json({ message: 'Производитель не найден' })
       }
     }
+    if (supplierId != null) {
+      const [se] = await pool.execute('SELECT id FROM suppliers WHERE id = ? LIMIT 1', [Number(supplierId)])
+      if (!se.length) return res.status(400).json({ message: 'Поставщик не найден' })
+    }
     const fields = []
     const values = []
     if (name != null) { fields.push('name = ?'); values.push(String(name)) }
@@ -376,15 +480,26 @@ app.put('/api/products/:id', async (req, res) => {
     if (discount != null) { fields.push('discount = ?'); values.push(Number(discount) || 0) }
     if (description !== undefined) { fields.push('description = ?'); values.push(description) }
     if (categoryId != null) { fields.push('category_id = ?'); values.push(Number(categoryId)) }
-    if (manufacturerId !== undefined) { fields.push('manufacturer_id = ?'); values.push(manufacturerId != null ? Number(manufacturerId) : null) }
+    if (manufacturerId !== undefined) { 
+      fields.push('manufacturer_id = ?'); 
+      values.push(manufacturerId != null && manufacturerId !== '' ? Number(manufacturerId) : null) 
+    }
+    if (supplierId !== undefined) { 
+      fields.push('supplier_id = ?'); 
+      values.push(supplierId != null && supplierId !== '' ? Number(supplierId) : null) 
+    }
     if (fields.length) {
       await pool.execute(`UPDATE products SET ${fields.join(', ')} WHERE id = ?`, [...values, id])
     }
     if (stock != null) {
-      const qty = Math.max(0, Number(stock) || 0)
-      await pool.execute('DELETE FROM storages WHERE product_id = ?', [id])
-      if (qty > 0) {
-        await pool.execute('INSERT INTO storages (product_id, quantity) VALUES (?, ?)', [id, qty])
+      try {
+        const qty = Math.max(0, Number(stock) || 0)
+        await pool.execute('DELETE FROM storages WHERE product_id = ?', [id])
+        if (qty > 0) {
+          await pool.execute('INSERT INTO storages (product_id, quantity) VALUES (?, ?)', [id, qty])
+        }
+      } catch (e) {
+        console.error('Update product stock set error', e)
       }
     }
     const [rows] = await pool.execute('SELECT id FROM products WHERE id = ? LIMIT 1', [id])
@@ -404,15 +519,22 @@ app.delete('/api/products/:id', async (req, res) => {
     if (!Number.isInteger(id) || id <= 0) {
       return res.status(400).json({ message: 'Некорректный идентификатор товара' })
     }
+    // Удаляем связанные записи во всех таблицах
+    await pool.execute('DELETE FROM order_items WHERE product_id = ?', [id])
     await pool.execute('DELETE FROM images WHERE product_id = ?', [id])
     await pool.execute('DELETE FROM storages WHERE product_id = ?', [id])
+    
     const [resDel] = await pool.execute('DELETE FROM products WHERE id = ?', [id])
     if (resDel.affectedRows === 0) {
       return res.status(404).json({ message: 'Товар не найден' })
     }
     return res.json({ ok: true })
   } catch (error) {
-    return res.status(500).json({ message: 'Ошибка удаления товара' })
+    console.error('Delete product error:', error)
+    return res.status(500).json({ 
+      message: 'Ошибка удаления товара', 
+      details: error.sqlMessage || error.message 
+    })
   }
 })
 

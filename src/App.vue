@@ -6,11 +6,23 @@ import Profile from './components/Profile.vue'
 import ProductDetails from './components/ProductDetails.vue'
 import Cart from './components/Cart.vue'
 import Admin from './components/Admin.vue'
+import Notification from './components/Notification.vue'
 
 const currentUser = ref(null)
 const currentView = ref('catalog')
 const selectedProductId = ref(null)
 const cart = ref([])
+
+const notifications = ref([])
+
+const addNotification = (message, type = 'success') => {
+  const id = Date.now()
+  notifications.value.push({ id, message, type })
+}
+
+const removeNotification = (id) => {
+  notifications.value = notifications.value.filter(n => n.id !== id)
+}
 
 const loadCurrentUser = () => {
   try {
@@ -57,6 +69,9 @@ const handleLogin = (user) => {
   if (user?.role === 'guest') {
     cart.value = []
     saveCart()
+    addNotification('Вы вошли как гость', 'info')
+  } else {
+    addNotification(`Добро пожаловать, ${user.name}!`, 'success')
   }
 }
 
@@ -64,6 +79,7 @@ const logout = () => {
   localStorage.removeItem('currentUser')
   currentUser.value = null
   currentView.value = 'catalog'
+  addNotification('Вы вышли из системы', 'info')
 }
 
 const openProfile = () => {
@@ -101,6 +117,7 @@ const openAdmin = () => {
 const addToCart = (product, quantity) => {
   if (!canShop.value) {
     currentView.value = 'auth'
+    addNotification('Для добавления в корзину нужно войти', 'info')
     return
   }
   const stock = Number(product?.stock) || Infinity
@@ -123,6 +140,7 @@ const addToCart = (product, quantity) => {
     })
   }
   saveCart()
+  addNotification(`${product.name} добавлен в корзину`, 'success')
 }
 
 const updateCartQty = (id, qty) => {
@@ -144,8 +162,12 @@ const removeFromCart = (id) => {
     currentView.value = 'auth'
     return
   }
+  const item = cart.value.find(it => it.id === id)
   cart.value = cart.value.filter((it) => it.id !== id)
   saveCart()
+  if (item) {
+    addNotification(`${item.name} удален из корзины`, 'info')
+  }
 }
 
 const clearCart = () => {
@@ -155,11 +177,13 @@ const clearCart = () => {
   }
   cart.value = []
   saveCart()
+  addNotification('Корзина очищена', 'info')
 }
 
 const handleUserUpdated = (user) => {
   currentUser.value = user
   localStorage.setItem('currentUser', JSON.stringify(user))
+  addNotification('Профиль успешно обновлен', 'success')
 }
 
 onMounted(() => {
@@ -182,13 +206,14 @@ onMounted(() => {
 <template>
   <main class="layout">
     <section v-if="!currentUser" class="layout__center layout__center--auth">
-      <AuthForm @login="handleLogin" />
+      <AuthForm @login="handleLogin" @notify="addNotification" />
     </section>
 
     <section v-else class="layout__center layout__center--catalog">
       <Admin
         v-if="['админ','admin','администратор'].includes(String(currentUser.role).toLowerCase())"
         @logout="logout"
+        @notify="addNotification"
       />
       <Catalog
         v-else-if="currentView === 'catalog'"
@@ -229,14 +254,38 @@ onMounted(() => {
         @qty-change="updateCartQty"
         @remove="removeFromCart"
         @clear="clearCart"
+        @order-success="() => addNotification('Заказ успешно оформлен!', 'success')"
       />
     </section>
+
+    <!-- Уведомления -->
+    <div class="notifications-container">
+      <Notification
+        v-for="n in notifications"
+        :key="n.id"
+        :message="n.message"
+        :type="n.type"
+        @close="removeNotification(n.id)"
+      />
+    </div>
   </main>
 </template>
 
 <style scoped>
 .layout {
   min-height: 100vh;
+}
+
+.notifications-container {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.notifications-container > * {
+  pointer-events: auto;
 }
 
 .layout__center {

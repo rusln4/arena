@@ -125,7 +125,8 @@ const getImageSrc = (productId) => {
   if (hasBrokenImage(productId)) {
     return placeholderImage
   }
-  return `/api/product-image/${productId}`
+  const p = products.value.find((prod) => prod.id === productId)
+  return `/api/product-image/${productId}${p?.imageId ? `?v=${p.imageId}` : ''}`
 }
 
 const clearFilters = () => {
@@ -187,6 +188,7 @@ const addToCart = (product) => {
     discount: product.discount,
     manufacturer: product.manufacturer,
     stock: product.stock,
+    imageId: product.imageId,
   }, 1)
 }
 

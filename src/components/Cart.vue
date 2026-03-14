@@ -19,7 +19,7 @@ const props = defineProps({
   },
 })
 
-const emits = defineEmits(['back', 'qty-change', 'remove', 'clear'])
+const emits = defineEmits(['back', 'qty-change', 'remove', 'clear', 'order-success'])
 
 const priceFormatter = new Intl.NumberFormat('ru-RU', {
   style: 'currency',
@@ -40,7 +40,7 @@ const total = computed(() =>
 
 const formatPrice = (v) => priceFormatter.format(v || 0)
 
-const imageSrc = (id) => `/api/product-image/${id}`
+const imageSrc = (item) => `/api/product-image/${item.id}${item.imageId ? `?v=${item.imageId}` : ''}`
 
 const onQtyInput = (it, e) => {
   const max = Number(it.stock) || Infinity
@@ -85,6 +85,7 @@ const checkout = async () => {
     success.value = { orderId: data.orderId, total: data.total, count }
     showModal.value = true
     message.value = `Заказ №${data.orderId} оформлен. Сумма: ${formatPrice(data.total)}`
+    emits('order-success')
     emits('clear')
   } catch (e) {
     error.value = e.message || 'Ошибка оформления заказа'
@@ -110,7 +111,7 @@ const checkout = async () => {
       <section class="cart__list">
         <article v-for="it in items" :key="it.id" class="cart__item">
           <div class="cart__media">
-            <img :src="imageSrc(it.imageId)" :alt="it.name" class="cart__image" @error="$event.target.src = placeholderImage" />
+            <img :src="imageSrc(it)" :alt="it.name" class="cart__image" @error="$event.target.src = placeholderImage" />
           </div>
           <div class="cart__info">
             <h3 class="cart__name">{{ it.name }}</h3>

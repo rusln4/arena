@@ -2,16 +2,23 @@
 import { ref, onMounted, computed } from 'vue'
 import placeholderImage from './icons/заглушка.jpg'
 
-const emits = defineEmits(['logout'])
+const emits = defineEmits(['logout', 'notify'])
+
+const addNotification = (message, type = 'success') => {
+  emits('notify', message, type)
+}
 
 const products = ref([])
 const categories = ref([])
 const manufacturers = ref([])
+const suppliers = ref([])
 const loading = ref(false)
 const error = ref('')
 const formError = ref('')
 const editingId = ref(null)
+const originalForm = ref(null)
 const brokenImageIds = ref([])
+const imageDataUrl = ref('')
 
 const form = ref({
   name: '',
@@ -20,11 +27,13 @@ const form = ref({
   description: '',
   categoryId: null,
   manufacturerId: null,
+  supplierId: null,
   stock: null,
 })
 
 const resetForm = () => {
   editingId.value = null
+  originalForm.value = null
   form.value = {
     name: '',
     price: null,
@@ -32,9 +41,26 @@ const resetForm = () => {
     description: '',
     categoryId: null,
     manufacturerId: null,
+    supplierId: null,
     stock: null,
   }
   formError.value = ''
+  imageDataUrl.value = ''
+  ensureDefaults()
+}
+
+const ensureDefaults = () => {
+  if (!editingId.value) {
+    if (categories.value.length && (form.value.categoryId == null)) {
+      form.value.categoryId = categories.value[0].id
+    }
+    if (manufacturers.value.length && (form.value.manufacturerId == null)) {
+      form.value.manufacturerId = manufacturers.value[0].id
+    }
+    if (suppliers.value.length && (form.value.supplierId == null)) {
+      form.value.supplierId = suppliers.value[0].id
+    }
+  }
 }
 
 const hasBrokenImage = (productId) => brokenImageIds.value.includes(productId)
@@ -45,17 +71,19 @@ const markImageBroken = (productId) => {
 }
 const getImageSrc = (productId) => {
   if (hasBrokenImage(productId)) return placeholderImage
-  return `/api/product-image/${productId}`
+  const p = products.value.find(prod => prod.id === productId)
+  return `/api/product-image/${productId}${p?.imageId ? `?v=${p.imageId}` : ''}`
 }
 
 const loadAll = async () => {
   loading.value = true
   error.value = ''
   try {
-    const [pc, cc, mc] = await Promise.all([
+    const [pc, cc, mc, sc] = await Promise.all([
       fetch('/api/products'),
       fetch('/api/categories'),
       fetch('/api/manufacturers'),
+      fetch('/api/suppliers'),
     ])
     const parseSafe = async (res) => {
       const ct = (res.headers.get('content-type') || '').toLowerCase()
@@ -66,12 +94,16 @@ const loadAll = async () => {
     const pj = await parseSafe(pc)
     const cj = await parseSafe(cc)
     const mj = await parseSafe(mc)
+    const sj = await parseSafe(sc)
     if (!pc.ok) throw new Error(pj?.message || 'Ошибка загрузки товаров')
     if (!cc.ok) throw new Error(cj?.message || 'Ошибка загрузки категорий')
     if (!mc.ok) throw new Error(mj?.message || 'Ошибка загрузки производителей')
+    if (!sc.ok) throw new Error(sj?.message || 'Ошибка загрузки поставщиков')
     products.value = pj.products || []
     categories.value = cj.categories || []
     manufacturers.value = mj.manufacturers || []
+    suppliers.value = sj.suppliers || []
+    ensureDefaults()
   } catch (e) {
     error.value = e.message || 'Ошибка загрузки данных'
   } finally {
@@ -89,15 +121,20 @@ const startEdit = (p) => {
     discount: Number(p.discount) || 0,
     description: p.description || '',
     categoryId: p.categoryId || null,
-    manufacturerId: null,
+    manufacturerId: p.manufacturerId ?? null,
+    supplierId: p.supplierId ?? null,
     stock: p.stock != null ? Number(p.stock) : null,
   }
+  originalForm.value = JSON.parse(JSON.stringify(form.value))
   formError.value = ''
+  imageDataUrl.value = ''
 }
 
 const validate = () => {
   if (!String(form.value.name).trim()) return 'Заполните название'
   if (form.value.categoryId == null) return 'Выберите категорию'
+  if (form.value.manufacturerId == null) return 'Выберите производителя'
+  if (form.value.supplierId == null) return 'Выберите поставщика'
   const price = Number(form.value.price)
   if (!Number.isFinite(price) || price < 0) return 'Цена должна быть неотрицательным числом'
   const disc = Number(form.value.discount || 0)
@@ -112,6 +149,16 @@ const validate = () => {
 const save = async () => {
   formError.value = validate()
   if (formError.value) return
+
+  if (editingId.value && originalForm.value) {
+    const hasDataChanged = JSON.stringify(form.value) !== JSON.stringify(originalForm.value)
+    const hasImageChanged = !!imageDataUrl.value
+    if (!hasDataChanged && !hasImageChanged) {
+      addNotification('Изменений нет', 'info')
+      return
+    }
+  }
+
   try {
     const payload = {
       name: form.value.name,
@@ -120,6 +167,7 @@ const save = async () => {
       description: form.value.description || null,
       categoryId: form.value.categoryId,
       manufacturerId: form.value.manufacturerId,
+      supplierId: form.value.supplierId,
       stock: form.value.stock != null ? Number(form.value.stock) : null,
     }
     let res
@@ -139,20 +187,63 @@ const save = async () => {
     const ct = (res.headers.get('content-type') || '').toLowerCase()
     const data = ct.includes('application/json') ? await res.json() : { message: await res.text() }
     if (!res.ok) throw new Error(data?.message || 'Ошибка сохранения товара')
+    addNotification(editingId.value ? 'Товар обновлен' : 'Товар создан', 'success')
+    const productId = editingId.value || data?.product?.id
+    if (productId && imageDataUrl.value) {
+      const ir = await fetch(`/api/products/${productId}/image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl: imageDataUrl.value }),
+      })
+      const ict = (ir.headers.get('content-type') || '').toLowerCase()
+      const idata = ict.includes('application/json') ? await ir.json() : { message: await ir.text() }
+      if (!ir.ok) throw new Error(idata?.message || 'Ошибка загрузки изображения')
+      
+      // Сбрасываем imageDataUrl после успешной загрузки
+      imageDataUrl.value = ''
+      
+      // Удаляем из списка "битых" картинок, если она там была
+      brokenImageIds.value = brokenImageIds.value.filter(id => id !== productId)
+    }
+    
     await loadAll()
-    resetForm()
+    
+    if (!editingId.value) {
+      resetForm()
+    } else {
+      // Если редактировали, находим обновленный товар и синхронизируем форму
+      const updatedProduct = products.value.find(p => p.id === productId)
+      if (updatedProduct) {
+        startEdit(updatedProduct)
+      }
+    }
   } catch (e) {
     formError.value = e.message || 'Ошибка сохранения'
   }
 }
 
+const onFileChange = (e) => {
+  const file = e.target.files && e.target.files[0]
+  if (!file) {
+    imageDataUrl.value = ''
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = () => {
+    imageDataUrl.value = String(reader.result || '')
+  }
+  reader.readAsDataURL(file)
+}
 const remove = async (id) => {
   if (!confirm('Удалить товар?')) return
   try {
     const res = await fetch(`/api/products/${id}`, { method: 'DELETE' })
     const ct = (res.headers.get('content-type') || '').toLowerCase()
     const data = ct.includes('application/json') ? await res.json() : { message: await res.text() }
-    if (!res.ok) throw new Error(data?.message || 'Ошибка удаления')
+    if (!res.ok) {
+      throw new Error(data?.details || data?.message || 'Ошибка удаления')
+    }
+    addNotification('Товар успешно удален', 'info')
     await loadAll()
     if (editingId.value === id) resetForm()
   } catch (e) {
@@ -181,16 +272,23 @@ const remove = async (id) => {
           </label>
           <label>
             <span>Категория</span>
-            <select v-model="form.categoryId">
+            <select v-model.number="form.categoryId" required>
               <option :value="null" disabled>Выберите</option>
               <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
           </label>
           <label>
             <span>Производитель</span>
-            <select v-model="form.manufacturerId">
-              <option :value="null">Не указан</option>
+            <select v-model.number="form.manufacturerId" required>
+              <option :value="null" disabled>Выберите</option>
               <option v-for="m in manufacturers" :key="m.id" :value="m.id">{{ m.name }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Поставщик</span>
+            <select v-model.number="form.supplierId" required>
+              <option :value="null" disabled>Выберите</option>
+              <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
             </select>
           </label>
           <label>
@@ -208,6 +306,11 @@ const remove = async (id) => {
           <label>
             <span>Описание</span>
             <textarea v-model="form.description" rows="4" />
+          </label>
+          <label>
+            <span>Изображение</span>
+            <input type="file" accept="image/*" @change="onFileChange" />
+            <img v-if="imageDataUrl" :src="imageDataUrl" alt="Предпросмотр" class="admin__preview" />
           </label>
           <p v-if="formError" class="admin__msg admin__msg--err">{{ formError }}</p>
           <div class="admin__actions">
@@ -268,6 +371,7 @@ const remove = async (id) => {
 .admin__actions { display: flex; gap: .5rem; margin-top: .25rem; }
 .admin__btn { padding: .5rem .9rem; border-radius: 999px; border: 1px solid var(--color-border); background: transparent; cursor: pointer; }
 .admin__btn--primary { background: var(--vt-c-indigo); color: #fff; border: none; }
+.admin__preview { display: block; margin-top: .5rem; max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--color-border); }
 .admin__grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
 .admin__card { border-radius: 12px; background-color: var(--color-background-soft); padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06); cursor: pointer; transition: transform .18s ease, box-shadow .18s ease; }
 .admin__card:hover { transform: translateY(-2px); box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }

@@ -16,7 +16,11 @@ const regPassword = ref('')
 const error = ref('')
 const success = ref('')
 
-const emits = defineEmits(['login'])
+const emits = defineEmits(['login', 'notify'])
+
+const addNotification = (message, type = 'success') => {
+  emits('notify', message, type)
+}
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const regPasswordRules = (val) => {
@@ -94,6 +98,7 @@ const onLogin = async () => {
 
     if (!response.ok) {
       error.value = data?.message || 'Ошибка авторизации'
+      addNotification(error.value, 'error')
       return
     }
 
@@ -157,6 +162,7 @@ const onRegister = async () => {
 
     if (!response.ok) {
       error.value = data?.message || 'Ошибка регистрации'
+      addNotification(error.value, 'error')
       return
     }
 

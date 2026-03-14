@@ -48,7 +48,7 @@ const formatPrice = (v) => priceFormatter.format(v || 0)
 const imageSrc = computed(() => {
   if (!product.value) return ''
   if (imageBroken.value) return placeholderImage
-  return `/api/product-image/${product.value.id}`
+  return `/api/product-image/${product.value.id}${product.value.imageId ? `?v=${product.value.imageId}` : ''}`
 })
 
 const load = async () => {
